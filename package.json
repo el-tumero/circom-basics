@@ -1,0 +1,21 @@
+{
+  "name": "circom-basics",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "compile": "circom tree.circom --r1cs --wasm --sym -o ./tree",
+    "witness": "node tree/tree_js/generate_witness.js tree/tree_js/tree.wasm input.json tree/witness.wtns",
+    "phase2": "snarkjs groth16 setup tree/tree.r1cs pot12_final.ptau tree/tree_0000.zkey; snarkjs zkey contribute tree/tree_0000.zkey tree/tree_0001.zkey --name=\"ticoma\" -e=\"ticoma\" -v; snarkjs zkey export verificationkey tree/tree_0001.zkey tree/verification_key.json",
+    "proof": "snarkjs groth16 prove tree/tree_0001.zkey tree/witness.wtns tree/proof.json tree/public.json",
+    "verify": "snarkjs groth16 verify tree/verification_key.json tree/public.json tree/proof.json",
+    "all": "npm run witness; npm run phase2; npm run proof; npm run verify"
+
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "circomlib": "^2.0.5"
+  }
+}
