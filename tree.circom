@@ -12,84 +12,94 @@ include "node_modules/circomlib/circuits/sha256/sha256.circom";
 
 // 0x5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9 // hash zera
 
-// template PerformSnapshot() {
-//     signal input leafCount;
-//     signal input inputLeafs;
-//     signal input prevRoot;
 
-//     signal output root;
+
+template HashLeftRight() {
+    signal input left;
+    signal input right;
+    signal output hash;
+
+    component hasher = Poseidon(2);
+
+    hasher.inputs[0] <== left;
+    hasher.inputs[1] <== right;
+    hash <== hasher.out;
+}
+
+template MerkleTreeConstructor() {
+    signal input data[4];
+    signal output root;
+    signal output branches[2];
+    signal output hashedLeaves[4];
     
-// }
+    component hashers[3];
+    component leafHashers[4];
 
-// v -> v .. .. ..
+    for(var i = 0; i < 4; i++) {
+        leafHashers[i] = Poseidon(1);
+        leafHashers[i].inputs[0] <== data[i];
+        hashedLeaves[i] <== leafHashers[i].out;
+    }
 
-// function ComputeTree() {
+    for(var i = 0; i < 2; i++) {
+        hashers[i] = HashLeftRight();
+        hashers[i].left <== leafHashers[i*2].out;
+        hashers[i].right <== leafHashers[(i*2)+1].out;
+        branches[i] <== hashers[i].out;
+    }
+    
+    hashers[2] = HashLeftRight();
+    hashers[2].left <== branches[0];
+    hashers[2].right <== branches[1];
 
-// }
+    root <== hashers[2].out;
+}
 
+// source: https://github.com/tornadocash/tornado-core/blob/master/circuits/merkleTree.circom
 
-// template Hash() {
-//     signal input in;
-//     signal output out;
+// if s == 0 returns [in[0], in[1]]
+// if s == 1 returns [in[1], in[0]]
+template DualMux() {
+    signal input in[2];
+    signal input s;
+    signal output out[2];
 
-//     component bits = Num2Bits(256);
-//     component num = Bits2Num(256);
-//     component hasher = Sha256(256);
+    s * (1 - s) === 0;
+    out[0] <== (in[1] - in[0])*s + in[0];
+    out[1] <== (in[0] - in[1])*s + in[1];
+}
 
-//     bits.in <== in;
-//     for (var i = 0; i < 256; i++) {
-//         hasher.in[i] <== bits.out[i];
-//     }
+// Verifies that merkle proof is correct for given merkle root and a leaf
+// pathIndices input is an array of 0/1 selectors telling whether given pathElement is on the left or right side of merkle path
+template MerkleTreeChecker(levels) {
+    signal input leafData;
+    signal input root;
+    signal input pathElements[levels];
+    signal input pathIndices[levels];
 
-//     for (var i = 0; i < 256; i++) {
-//         num.in[i] <== hasher.out[i];
-//     }
+    component leaf = Poseidon(1);
+    leaf.inputs[0] <== leafData;
 
-//     out <== num.out;
-// }
-
-template Hash() {
-    signal input in;
     signal output out;
 
-    component hasher = Poseidon(1);
-    hasher.inputs[0] <== in;
-    out <== hasher.out;
+    component selectors[levels];
+    component hashers[levels];
+
+    for (var i = 0; i < levels; i++) {
+        selectors[i] = DualMux();
+        selectors[i].in[0] <== i == 0 ? leaf.out : hashers[i - 1].hash;
+        selectors[i].in[1] <== pathElements[i];
+        selectors[i].s <== pathIndices[i];
+
+        hashers[i] = HashLeftRight();
+        hashers[i].left <== selectors[i].out[0];
+        hashers[i].right <== selectors[i].out[1];
+    }
+    
+    out <== hashers[levels - 1].hash;
 }
 
 
+component main = MerkleTreeChecker(2);
 
 
-
-// template ExtendTree() {
-
-// }
-
-// // n is current tree leaves length
-// template ExtendTree() {
-//     component hashers[3];
-
-//     signal input n;
-//     signal output out;
-
-//     var zeroVal[32] = [110, 52, 11, 156, 255, 179, 122, 152, 156, 165, 68, 230, 187, 120, 10, 44, 120, 144, 29, 63, 179, 55, 56, 118, 133, 17, 163, 6, 23, 175, 160, 29];
-
-//     for(var i = 0; i < n; i++) {
-//         hashers[i] = HashLeftRight();
-//         hashers[i].left <== zeroVal;
-//         hashers[i].right <== zeroVal;
-//     }
-
-//     hashers[2] = HashLeftRight();
-//     hashers[2].left <== hashers[0].out;
-//     hashers[2].right <== hashers[1].out;
-
-//     out <== hashers[2].out;
-// }
-
-
-component main = Hash();
-
-// function EditLeaf() {
-
-// }
