@@ -26,33 +26,47 @@ template HashLeftRight() {
     hash <== hasher.out;
 }
 
-template MerkleTreeConstructor() {
-    signal input data[4];
+function log2(a) {
+    if (a==0) {
+        return 0;
+    }
+    var n = 1;
+    var r = 1;
+    while (n<a) {
+        r++;
+        n *= 2;
+    }
+    return r;
+}
+
+template MerkleTreeConstructor(leafCount) {
+    signal input data;
     signal output root;
-    signal output branches[2];
-    signal output hashedLeaves[4];
     
-    component hashers[3];
-    component leafHashers[4];
+    component dataHasher = Poseidon(1);
+    dataHasher.inputs[0] <== data;
 
-    for(var i = 0; i < 4; i++) {
-        leafHashers[i] = Poseidon(1);
-        leafHashers[i].inputs[0] <== data[i];
-        hashedLeaves[i] <== leafHashers[i].out;
-    }
+    var leaves[leafCount];
+    var levels = log2(leafCount);
 
-    for(var i = 0; i < 2; i++) {
+    component hashers[levels];
+
+    // Level loop
+    for (var i = 0; i < levels; i++ ) {
         hashers[i] = HashLeftRight();
-        hashers[i].left <== leafHashers[i*2].out;
-        hashers[i].right <== leafHashers[(i*2)+1].out;
-        branches[i] <== hashers[i].out;
-    }
-    
-    hashers[2] = HashLeftRight();
-    hashers[2].left <== branches[0];
-    hashers[2].right <== branches[1];
 
-    root <== hashers[2].out;
+        if(i == 0){
+            hashers[i].left <== dataHasher.out;
+            hashers[i].right <== dataHasher.out;
+        } else {
+            hashers[i].left <== hashers[i-1].hash;
+            hashers[i].right <== hashers[i-1].hash;
+        }
+
+        // i == 0 ? hasher[i].left <== dataHasher.out : hasher[i-1].out;
+    }
+
+    root <== hashers[levels - 1].hash;
 }
 
 // source: https://github.com/tornadocash/tornado-core/blob/master/circuits/merkleTree.circom
@@ -71,7 +85,8 @@ template DualMux() {
 
 // Verifies that merkle proof is correct for given merkle root and a leaf
 // pathIndices input is an array of 0/1 selectors telling whether given pathElement is on the left or right side of merkle path
-template MerkleTreeChecker(levels) {
+template MerkleTreeChecker() {
+    signal input levels;
     signal input leafData;
     signal input root;
     signal input pathElements[levels];
@@ -100,6 +115,6 @@ template MerkleTreeChecker(levels) {
 }
 
 
-component main = MerkleTreeChecker(2);
+component main = MerkleTreeConstructor(5);
 
 
